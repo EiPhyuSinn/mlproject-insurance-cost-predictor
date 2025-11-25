@@ -9,6 +9,7 @@ from src.exception import CustomException
 from src.utils import save_object
 import numpy as np 
 
+from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
@@ -32,6 +33,37 @@ models = {
     "AdaBoost Regressor": AdaBoostRegressor()
 }
 
+params = {
+    "Linear Regression": {}, # Linear models usually don't need tuning
+    "Lasso": {'alpha': [0.01, 0.1, 1, 10]},
+    "Ridge": {'alpha': [0.01, 0.1, 1, 10]},
+    "K-Neighbors Regressor": {'n_neighbors': [5, 7, 9, 11]},
+    "Decision Tree": {
+        'criterion': ['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
+        'splitter': ['best', 'random'],
+        'max_depth': [5, 10, 15, None],
+        'min_samples_split': [2, 5, 10]
+    },
+    "Random Forest Regressor": {
+        'n_estimators': [50, 100, 200],
+        'max_depth': [5, 10, None],
+        'min_samples_split': [2, 5]
+    },
+    "XGBRegressor": {
+        'learning_rate': [0.01, 0.1],
+        'n_estimators': [100, 200, 500],
+        'max_depth': [3, 5, 7]
+    },
+    "CatBoosting Regressor": {
+        'depth': [6, 8, 10],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'iterations': [30, 50]
+    },
+    "AdaBoost Regressor": {
+        'learning_rate': [0.01, 0.1, 1],
+        'n_estimators': [50, 100, 200]
+    }
+}
 
 def evaluate(test,pred):
     r2 = r2_score(test,pred)
@@ -69,9 +101,19 @@ class ModelTrainer:
             best_model_score = -np.inf
             best_model = None
 
+
             for model_name, model in models.items():
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
+
+                if model_name in params:
+                    model_params = params[model_name]
+                else:
+                    model_params = {}
+
+
+                grid_search = GridSearchCV(estimator=model, param_grid=model_params, cv=5, scoring='r2', verbose=3, n_jobs=-1)
+                grid_search.fit(X_train, y_train)
+
+                y_pred = grid_search.predict(X_test)
                 r2, mae, rmse = evaluate(y_test, y_pred)
 
                 logger.info(f"{model_name} -- R2: {r2}, MAE: {mae}, RMSE: {rmse}")
@@ -79,7 +121,7 @@ class ModelTrainer:
                 if r2 > best_model_score:
                     best_model_score = r2
                     best_model_name = model_name
-                    best_model = model
+                    best_model = grid_search
 
             logger.info(f"Best model found: {best_model_name} with R2 score: {best_model_score}")
 
